@@ -186,7 +186,7 @@ const StudentDashboard: React.FC<{ user: User }> = ({ user }) => {
                )}
                <Scanner
                   onScan={(result) => result && handleScan(result[0].rawValue)}
-                  onError={(error) => console.log(error?.message)}
+                  onError={(error: any) => console.log(error?.message)}
                />
                <div className="absolute inset-0 border-2 border-indigo-500/50 m-12 rounded-lg pointer-events-none">
                  <div className="absolute top-0 left-0 w-8 h-8 border-t-4 border-l-4 border-indigo-500 -ml-1 -mt-1 rounded-tl"></div>

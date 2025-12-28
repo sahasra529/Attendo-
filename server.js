@@ -13,8 +13,8 @@ const PORT = process.env.PORT || 3000;
 app.use(express.static(path.join(__dirname, 'dist')));
 
 // Handle SPA routing: send index.html for any request that doesn't match a static file
-app.get('*', (req, resentment) => {
-  resentment.sendFile(path.join(__dirname, 'dist', 'index.html'));
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, 'dist', 'index.html'));
 });
 
 app.listen(PORT, () => {
