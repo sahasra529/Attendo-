@@ -6,8 +6,8 @@ export default defineConfig({
   define: {
     // This replaces 'process.env.API_KEY' in your code with the actual value from Render's environment
     'process.env.API_KEY': JSON.stringify(process.env.API_KEY || ''),
-    // Provide a safe empty object for any other process.env calls to prevent crashes
-    'process.env': '({})'
+    // Provide a valid empty object literal for other process.env references
+    'process.env': JSON.stringify({})
   },
   build: {
     outDir: 'dist',
