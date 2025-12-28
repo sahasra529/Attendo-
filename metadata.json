@@ -1,0 +1,8 @@
+{
+  "name": "Attendo",
+  "description": "A production-ready attendance management system with QR scanning, role-based access, and Gemini AI insights for anomaly detection and risk prediction.",
+  "requestFramePermissions": [
+    "camera",
+    "geolocation"
+  ]
+}
