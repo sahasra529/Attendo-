@@ -1,13 +1,14 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 
+// This config ensures that environment variables are injected into the client bundle at build time.
 export default defineConfig({
   plugins: [react()],
   define: {
-    // This replaces 'process.env.API_KEY' in your code with the actual value from Render's environment
+    // Replaces 'process.env.API_KEY' with the actual value found in the environment during build
     'process.env.API_KEY': JSON.stringify(process.env.API_KEY || ''),
-    // Provide a valid empty object literal for other process.env references
-    'process.env': JSON.stringify({})
+    // Replaces 'process.env' with an empty object to prevent runtime ReferenceErrors
+    'process.env': JSON.stringify({}),
   },
   build: {
     outDir: 'dist',

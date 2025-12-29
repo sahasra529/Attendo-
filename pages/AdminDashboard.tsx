@@ -24,30 +24,56 @@ const AdminDashboard: React.FC<{ user: User }> = ({ user }) => {
       setStats(sData);
 
       const history = await studentApi.getHistory('all');
-      const ins = await getAttendanceInsights(history);
-      const anom = await detectAnomalies(history);
-      const rsk = await predictRisk(uData.filter((u: any) => u.role === UserRole.STUDENT), history);
+      
+      // Only call AI if history exists to avoid empty prompts
+      if (history && history.length > 0) {
+        const [ins, anom, rsk] = await Promise.all([
+          getAttendanceInsights(history),
+          detectAnomalies(history),
+          predictRisk(uData.filter((u: any) => u.role === UserRole.STUDENT), history)
+        ]);
 
-      setInsights(ins || '');
-      setAnomalies(anom || []);
-      setRisks(rsk || []);
+        setInsights(ins || '');
+        setAnomalies(anom || []);
+        setRisks(rsk || []);
+      }
     } catch (e) {
-      console.error(e);
+      console.error("AI Data Load Error:", e);
     } finally {
       setLoadingAI(false);
     }
+  };
+
+  const formatAIResponse = (text: string) => {
+    if (!text) return null;
+    return text.split('\n').map((line, i) => {
+      // Basic markdown-ish rendering for bold and bullets
+      let content: any = line;
+      if (line.startsWith('* ') || line.startsWith('- ')) {
+        content = <li className="ml-4 list-disc">{line.substring(2)}</li>;
+      }
+      
+      // Simple regex for bold **text**
+      const boldParts = line.split(/\*\*(.*?)\*\*/g);
+      if (boldParts.length > 1) {
+        content = boldParts.map((part, j) => j % 2 === 1 ? <strong key={j} className="font-black text-indigo-900">{part}</strong> : part);
+      }
+
+      return <p key={i} className="mb-2">{content}</p>;
+    });
   };
 
   const handleQuerySubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!query.trim()) return;
     setLoadingAI(true);
+    setQueryResult('');
     try {
       const history = await studentApi.getHistory('all');
       const result = await processNaturalLanguageQuery(query, { history, users, stats });
       setQueryResult(result || 'No result found.');
     } catch (e) {
-      setQueryResult('Failed to process AI query.');
+      setQueryResult('Failed to process AI query. Please check your API key.');
     } finally {
       setLoadingAI(false);
     }
@@ -108,29 +134,34 @@ const AdminDashboard: React.FC<{ user: User }> = ({ user }) => {
             <div className="absolute top-0 right-0 p-8 opacity-10">
               <svg className="w-48 h-48" fill="currentColor" viewBox="0 0 20 20"><path d="M13 6a3 3 0 11-6 0 3 3 0 016 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM14 15a4 4 0 00-8 0v3h8v-3zM6 8a2 2 0 11-4 0 2 2 0 014 0zM16 18v-3a.5.5 0 00-.5-.5h-11a.5.5 0 00-.5.5v3h12z" /></svg>
             </div>
-            <h3 className="text-2xl font-black mb-6 flex items-center">
-              <span className="mr-3 bg-white/20 p-2 rounded-xl">✨</span> Gemini AI Assistant
-            </h3>
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-2xl font-black flex items-center">
+                <span className="mr-3 bg-white/20 p-2 rounded-xl">✨</span> Gemini AI Assistant
+              </h3>
+              {!process.env.API_KEY && (
+                <span className="bg-red-500/20 text-red-200 px-3 py-1 rounded-full text-[10px] font-bold border border-red-500/30">API KEY MISSING</span>
+              )}
+            </div>
             <form onSubmit={handleQuerySubmit} className="relative z-10">
               <input
                 type="text"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                placeholder="Ask anything, e.g., 'Show attendance for Rahul S101 last month'"
-                className="w-full bg-white/10 border border-white/20 rounded-2xl px-6 py-5 focus:bg-white focus:text-gray-900 focus:outline-none transition-all text-lg placeholder:text-indigo-200"
+                placeholder="Ask anything, e.g., 'Who individually won the most bronze medals during the Paris Olympics in 2024?'"
+                className="w-full bg-white/10 border border-white/20 rounded-2xl px-6 py-5 focus:bg-white focus:text-gray-900 focus:outline-none transition-all text-lg placeholder:text-indigo-200 shadow-inner"
               />
               <button 
                 type="submit"
-                className="absolute right-4 top-4 bg-white text-indigo-700 px-6 py-2.5 rounded-xl font-black hover:bg-indigo-50 transition shadow-lg"
+                className="absolute right-4 top-4 bg-indigo-600 text-white px-6 py-2.5 rounded-xl font-black hover:bg-indigo-800 transition shadow-lg border border-indigo-500"
                 disabled={loadingAI}
               >
-                {loadingAI ? 'Working...' : 'Run Query'}
+                {loadingAI ? 'Processing...' : 'Ask Gemini'}
               </button>
             </form>
             {queryResult && (
               <div className="mt-8 p-6 bg-white/10 rounded-2xl text-sm leading-relaxed border border-white/10 font-medium backdrop-blur-sm animate-in fade-in slide-in-from-top-4">
-                <p className="text-indigo-100 mb-2 font-black uppercase text-[10px] tracking-widest">AI Response</p>
-                {queryResult}
+                <p className="text-indigo-100 mb-4 font-black uppercase text-[10px] tracking-widest border-b border-white/10 pb-2">Assistant Response</p>
+                <div className="text-indigo-50">{formatAIResponse(queryResult)}</div>
               </div>
             )}
           </div>
@@ -140,16 +171,25 @@ const AdminDashboard: React.FC<{ user: User }> = ({ user }) => {
               <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
                 <div className="px-8 py-6 border-b border-gray-100 bg-gray-50/50 flex justify-between items-center">
                   <h3 className="text-lg font-black text-gray-900">System Insights</h3>
-                  <button onClick={loadData} disabled={loadingAI} className="text-[10px] font-black text-indigo-600 bg-indigo-50 px-3 py-1.5 rounded-lg hover:bg-indigo-100 transition">REFRESH AI</button>
+                  <button onClick={loadData} disabled={loadingAI} className="text-[10px] font-black text-indigo-600 bg-indigo-50 px-3 py-1.5 rounded-lg hover:bg-indigo-100 transition flex items-center gap-2">
+                    {loadingAI && <div className="w-3 h-3 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>}
+                    REFRESH AI
+                  </button>
                 </div>
                 <div className="p-8">
-                  {loadingAI ? (
+                  {loadingAI && !insights ? (
                     <div className="flex flex-col items-center py-10">
                       <div className="w-10 h-10 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin mb-4"></div>
                       <p className="text-gray-400 font-bold text-sm animate-pulse">Consulting Gemini AI...</p>
                     </div>
+                  ) : insights ? (
+                    <div className="text-gray-600 leading-relaxed font-medium">
+                      {formatAIResponse(insights)}
+                    </div>
                   ) : (
-                    <div className="text-gray-600 leading-relaxed font-medium space-y-4" dangerouslySetInnerHTML={{ __html: insights.replace(/\n/g, '<br/>') }} />
+                    <div className="text-center py-10">
+                       <p className="text-gray-400 italic">No insights generated. Ensure API key is provided and attendance records exist.</p>
+                    </div>
                   )}
                 </div>
               </div>
@@ -162,13 +202,14 @@ const AdminDashboard: React.FC<{ user: User }> = ({ user }) => {
                   {anomalies.length > 0 ? (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       {anomalies.map((anom, i) => (
-                        <div key={i} className={`p-5 rounded-2xl border-2 flex gap-4 ${anom.severity === 'High' ? 'bg-red-50 border-red-100 text-red-900' : 'bg-yellow-50 border-yellow-100 text-yellow-900'}`}>
+                        <div key={i} className={`p-5 rounded-2xl border-2 flex gap-4 transition hover:scale-[1.02] ${anom.severity === 'High' ? 'bg-red-50 border-red-100 text-red-900' : 'bg-yellow-50 border-yellow-100 text-yellow-900'}`}>
                           <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${anom.severity === 'High' ? 'bg-red-200' : 'bg-yellow-200'}`}>
                              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
                           </div>
                           <div>
                             <p className="text-sm font-black">{anom.attendanceId}</p>
                             <p className="text-xs font-medium opacity-80">{anom.reason}</p>
+                            <span className="text-[9px] font-black uppercase mt-1 block">Severity: {anom.severity}</span>
                           </div>
                         </div>
                       ))}
@@ -191,14 +232,14 @@ const AdminDashboard: React.FC<{ user: User }> = ({ user }) => {
               </div>
               <div className="p-6 space-y-4">
                  {risks.length > 0 ? risks.map((risk, i) => (
-                    <div key={i} className="p-4 rounded-2xl bg-gray-50 border border-gray-100 hover:border-indigo-200 transition-all">
+                    <div key={i} className="p-4 rounded-2xl bg-gray-50 border border-gray-100 hover:border-indigo-200 transition-all group">
                       <div className="flex justify-between items-start mb-2">
                         <p className="font-black text-gray-800">{risk.studentId}</p>
                         <span className={`text-[9px] px-2 py-0.5 rounded-full font-black uppercase ${risk.riskLevel === 'High' ? 'bg-red-100 text-red-700' : 'bg-yellow-100 text-yellow-700'}`}>
                           {risk.riskLevel} Risk
                         </span>
                       </div>
-                      <p className="text-[10px] text-gray-500 font-bold leading-tight mb-3">{risk.warningMessage}</p>
+                      <p className="text-[10px] text-gray-500 font-bold leading-tight mb-3 group-hover:text-gray-700 transition-colors">{risk.warningMessage}</p>
                       <div className="w-full bg-gray-200 h-1.5 rounded-full overflow-hidden">
                         <div 
                           className={`h-full transition-all duration-1000 ${risk.predictedPercentage < 75 ? 'bg-red-500' : 'bg-green-500'}`} 
@@ -247,7 +288,7 @@ const AdminDashboard: React.FC<{ user: User }> = ({ user }) => {
                      {u.status === 'Pending' && (
                        <button 
                          onClick={() => approveUser(u.email)}
-                         className="text-[10px] font-black text-white bg-indigo-600 px-4 py-2 rounded-xl hover:bg-indigo-700 transition"
+                         className="text-[10px] font-black text-white bg-indigo-600 px-4 py-2 rounded-xl hover:bg-indigo-700 transition shadow-sm"
                        >
                          APPROVE
                        </button>
